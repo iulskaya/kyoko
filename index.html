@@ -925,14 +925,24 @@ canvas.addEventListener('pointerdown',function(e){
 
 function askPassword(){
   const input = prompt("Норико молча смотрит. Попробуй сказать ей что-нибудь, чтобы убедить отдать приглашение.");
-  if(!input) return;
 
-  let user = Object.values(USERS).find(u => u.password === input);
+  if(!input){
+    alert("Норико фыркнула и ускользнула.");
+    resetCat();
+    showMsg('Норико снова в саду ✦');
+    return;
+  }
+
+  const cleanInput = input.trim();
+
+  let user = Object.values(USERS).find(u => u.password === cleanInput);
 
   if(user){
     showInvite(user);
   } else {
     alert("Кажется, не сработало. Попробуй ещё раз.");
+    resetCat();
+    showMsg('Норико ускользнула ✦');
   }
 }
 
