@@ -7,10 +7,33 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Noto+Serif+JP:wght@300;400&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
-html,body{width:100%;min-height:100%;overflow-x:hidden;background:#f6f1ea;}
-body{margin:0;}
-#gr{width:100%;min-height:100svh;position:relative;overflow:hidden;border-radius:0;font-family:'Cormorant Garamond',serif;}
-#scene-canvas{display:block;width:100%;touch-action:manipulation;}
+
+html,
+body{
+  margin:0;
+  width:100%;
+  min-height:100%;
+  overflow:hidden;
+  background:#101010;
+}
+
+#gr{
+  width:100vw;
+  height:100svh;
+  position:relative;
+  overflow:hidden;
+  border-radius:0;
+  font-family:'Cormorant Garamond',serif;
+  touch-action:manipulation;
+}
+
+#scene-canvas{
+  position:absolute;
+  left:0;
+  top:0;
+  display:block;
+  max-width:none;
+}
 #hud{position:absolute;top:10px;left:0;right:0;text-align:center;pointer-events:none;z-index:10;}
 #hud-text{display:inline-block;background:rgba(20,10,5,0.48);color:rgba(255,240,210,0.95);font-size:15px;font-style:italic;padding:6px 20px;border-radius:20px;letter-spacing:0.5px;}
 #msg-pop{
@@ -158,17 +181,63 @@ const inviteImg = document.getElementById('invite-img');
 const inviteMissing = document.getElementById('invite-missing');
 
 let W, H, dpr;
+let viewW = 0;
+let viewH = 0;
+let canvasOffsetX = 0;
+let canvasOffsetY = 0;
+
+const WORLD_MIN_W = 760;
+const WORLD_MIN_H = 560;
+
 function resize(){
-  dpr = window.devicePixelRatio||1;
-  W = canvas.parentElement.offsetWidth;
-  // На телефоне холст ниже, чтобы игра не превращалась в огромную простыню.
-  H = Math.min(480, Math.max(360, Math.round(W * 0.72)));
-  canvas.width = W*dpr; canvas.height = H*dpr;
-  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  dpr = window.devicePixelRatio || 1;
+
+  viewW = gr.clientWidth || window.innerWidth;
+  viewH = gr.clientHeight || window.innerHeight;
+
+  W = Math.max(viewW, WORLD_MIN_W);
+  H = Math.max(viewH, WORLD_MIN_H);
+
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  canvasOffsetX = (viewW - W) / 2;
+  canvasOffsetY = (viewH - H) / 2;
+
+  canvas.style.left = canvasOffsetX + 'px';
+  canvas.style.top = canvasOffsetY + 'px';
+
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 resize();
 window.addEventListener('resize', resize);
+function visibleMinX(pad=0){
+  return Math.max(pad, -canvasOffsetX + pad);
+}
+
+function visibleMaxX(pad=0){
+  return Math.min(W - pad, -canvasOffsetX + viewW - pad);
+}
+
+function randomVisibleX(pad=40){
+  const min = visibleMinX(pad);
+  const max = visibleMaxX(pad);
+
+  if(max <= min) return W / 2;
+
+  return min + Math.random() * (max - min);
+}
+
+function visibleEdgeAwayFromCat(pad=45){
+  const min = visibleMinX(pad);
+  const max = visibleMaxX(pad);
+  const mid = (min + max) / 2;
+
+  return cat.x > mid ? min : max;
+}
 
 // ---- TERRAIN: multiple ground levels for parallax ----
 // Noriko can walk on 3 "lanes" with different y positions
@@ -539,18 +608,24 @@ function catY(){ return laneY(cat.laneIdx, cat.x/W); }
 function catScale(){ return LANES[cat.laneIdx].scale; }
 
 function pickTarget(){
-  const bs=sceneElements.filter(e=>e.type==='bush');
-  if(Math.random()<0.25 && bs.length){
-    const b=bs[Math.floor(Math.random()*bs.length)];
-    cat.target=b.tx*W;
-    cat.targetLane=b.lane;
-    cat.hideBush=b;
-    cat.state='toHide';
+  const bs = sceneElements.filter(e => {
+    if(e.type !== 'bush') return false;
+
+    const bx = e.tx * W;
+    return bx > visibleMinX(60) && bx < visibleMaxX(60);
+  });
+
+  if(Math.random() < 0.25 && bs.length){
+    const b = bs[Math.floor(Math.random() * bs.length)];
+    cat.target = b.tx * W;
+    cat.targetLane = b.lane;
+    cat.hideBush = b;
+    cat.state = 'toHide';
   } else {
-    cat.target=40+Math.random()*(W-80);
-    cat.targetLane=Math.floor(Math.random()*3);
-    cat.hideBush=null;
-    cat.state='walk';
+    cat.target = randomVisibleX(50);
+    cat.targetLane = Math.floor(Math.random() * 3);
+    cat.hideBush = null;
+    cat.state = 'walk';
   }
 }
 
@@ -564,9 +639,13 @@ function showMsg(t){
 let caught=false;
 
 function resetCat(){
-  caught=false; cat.attempts=0;
-  cat.x=80+Math.random()*(W-160); cat.laneIdx=1;
-  cat.state='walk'; cat.hidden=false; cat.hideBush=null;
+  caught = false;
+  cat.attempts = 0;
+  cat.x = randomVisibleX(80);
+  cat.laneIdx = 1;
+  cat.state = 'walk';
+  cat.hidden = false;
+  cat.hideBush = null;
   pickTarget();
 }
 
@@ -671,7 +750,7 @@ const speed=cat.state==='run'?240:(cat.state==='toHide'?160:85);
     }
   }
   
-  cat.x=Math.max(20,Math.min(W-20,cat.x));
+  cat.x = Math.max(visibleMinX(20), Math.min(visibleMaxX(20), cat.x));
 }
 
 // ---- RENDER ----
@@ -832,14 +911,14 @@ canvas.addEventListener('pointerdown',function(e){
       setTimeout(()=>askPassword(),500);
     } else {
       cat.state='run';
-      cat.target=Math.random()<0.5?20+Math.random()*80:W-100+Math.random()*80;
+      cat.target = visibleEdgeAwayFromCat(45);
       cat.targetLane=Math.floor(Math.random()*3);
       const ms=['Ускользнула!','Почти поймала!','Норико слишком быстрая...','Осторожнее!'];
       showMsg(ms[Math.floor(Math.random()*ms.length)]+' ✦');
     }
   } else if(dist<90){
     cat.state='run';
-    cat.target=cat.x>W/2?20+Math.random()*60:W-80+Math.random()*60;
+    cat.target = visibleEdgeAwayFromCat(45);
     cat.targetLane=Math.floor(Math.random()*3);
   }
 });
